@@ -2,12 +2,15 @@ import React, {useContext, useState} from 'react'
 import './App.css'
 import {Input, Button} from 'antd'
 import {Bar} from 'react-chartjs-2'
+import * as moment from 'moment'
+const ButtonGroup = Button.Group;
 
 const context = React.createContext()
 
 function App() {
   const [state, setState] = useState({
     searchTerm:'',
+    mode:'hourly',
   })
   return <context.Provider value={{
     ...state,
@@ -22,9 +25,10 @@ function App() {
 
 function Header(){
   const ctx = useContext(context)
+  const {loading, searchTerm, mode} = ctx
   return <header className="App-header">
     <Input 
-      value={ctx.searchTerm}
+      value={ctx.searchTerm} disabled={loading}
       onChange={e=> ctx.set({searchTerm: e.target.value})}
       style={{height:'3rem',fontSize:'2rem'}} 
       onKeyPress={e=>{
@@ -33,23 +37,34 @@ function Header(){
     />
     <Button style={{marginLeft:5,height:'3rem'}}
       onClick={()=> search(ctx)} type="primary"
-      disabled={!ctx.searchTerm}>
+      disabled={!searchTerm} loading={loading}>
       Search
     </Button>
+    <ButtonGroup style={{marginLeft:'5px', display:'flex'}}>
+      <Button style={{height:'3rem'}} type={mode==='hourly'?'primary':'deafult'}
+      onClick={()=>ctx.set({mode:'hourly'})}>Hourly</Button>
+      <Button style={{height:'3rem'}} type={mode==='daily'?'primary':'deafult'}
+      onClick={()=>ctx.set({mode:'daily'})}>Daily</Button>
+    </ButtonGroup>
   </header>
 }
 
 function Body(){
   const ctx = useContext(context)
-  const {error, weather} = ctx
+  const {error, weather, mode} = ctx
   let data
   if(weather){
     console.log(weather)
     data = {
-      labels: weather.hourly.data.map(d=>d.time),
+      labels: weather[mode].data.map(d=>moment(d.time*1000).format('dd hh:mm')),
       datasets: [{
         label:'Temperature',
-        data: weather.hourly.data.map(d=>d.temperature)
+        data: weather[mode].data.map(d=>{
+          if(mode==='hourly') return d.temperature
+          else return (d.temperatureHigh+d.temperatureLow)/2
+        }),
+        backgroundColor:'rgb(255, 155 , 155)',
+        borderColor:'rgb(255, 155 , 155)',
       }]
     }
   }
@@ -67,7 +82,7 @@ function Body(){
 async function search({searchTerm, set}){
   try {
     const term = searchTerm
-    set({searchTerm:'', error:''})
+    set({error:'', loading:true})
 
     const osmurl = `https://nominatim.openstreetmap.org/search/${term}?format=json`
     const r = await fetch(osmurl)
@@ -81,7 +96,7 @@ async function search({searchTerm, set}){
     const url = `https://cors-anywhere.herokuapp.com/https://api.darksky.net/forecast/${key}/${city.lat},${city.lon}`
     const r2 = await fetch(url)
     const weather = await r2.json()
-    set({weather})
+    set({weather, loading:false, searchTerm:''})
   } catch(e) {
     set({error: e.message})
   }
